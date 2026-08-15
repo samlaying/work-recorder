@@ -19,10 +19,10 @@ const screenshotDir = path.join(os.homedir(), 'Library/Application Support/work-
 
 const args = process.argv.slice(2);
 const isAll = args.includes('--all');
-let days = 7;
+let days = 1; // 默认一天一清
 const daysIdx = args.indexOf('--days');
 if (daysIdx !== -1 && args[daysIdx + 1]) {
-  days = parseInt(args[daysIdx + 1], 10) || 7;
+  days = parseInt(args[daysIdx + 1], 10) || 1;
 }
 
 if (!fs.existsSync(dbPath)) {

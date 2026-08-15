@@ -37,21 +37,29 @@ function recentContext(lines = 3) {
     .join('\n');
 }
 
-function pruneOldRecords(retentionDays = 14) {
+function pruneOldRecords(retentionDays = 1) {
   try {
     const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
     const cutoff = new Date(Date.now() + BEIJING_OFFSET_MS - retentionDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    db.prepare('DELETE FROM work_records WHERE substr(captured_at, 1, 10) < ?').run(cutoff);
-    db.prepare('DELETE FROM app_usage_sessions_v2 WHERE substr(started_at, 1, 10) < ?').run(cutoff);
-    db.prepare('DELETE FROM frame_dedup_logs WHERE substr(captured_at, 1, 10) < ?').run(cutoff);
-    db.prepare('DELETE FROM keyboard_heatmap WHERE date < ?').run(cutoff);
+    const r1 = db.prepare('DELETE FROM work_records WHERE substr(captured_at, 1, 10) < ?').run(cutoff);
+    const r2 = db.prepare('DELETE FROM app_usage_sessions_v2 WHERE substr(started_at, 1, 10) < ?').run(cutoff);
+    const r3 = db.prepare('DELETE FROM frame_dedup_logs WHERE substr(captured_at, 1, 10) < ?').run(cutoff);
+    const r4 = db.prepare('DELETE FROM keyboard_heatmap WHERE date < ?').run(cutoff);
+    const totalDeleted = (r1.changes || 0) + (r2.changes || 0) + (r3.changes || 0) + (r4.changes || 0);
+    if (totalDeleted > 0) {
+      db.exec('VACUUM;');
+      log.info(`auto-prune: cleaned ${totalDeleted} records older than ${cutoff}`);
+    }
   } catch (e) {
     log.warn(`auto-prune failed: ${e.message}`);
   }
 }
 
 function boot() {
-  pruneOldRecords(config.retentionDays ?? 14);
+  pruneOldRecords(config.retentionDays ?? 1);
+  // 定时每小时检查并清理一次过期旧数据（一天一清）
+  setInterval(() => pruneOldRecords(config.retentionDays ?? 1), 3600 * 1000);
+
   input = new InputMonitor({ log, keyboardHeatmap: config.keyboardHeatmap });
   try {
     input.start();

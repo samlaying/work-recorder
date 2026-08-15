@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const DEFAULTS = {
+  retentionDays: 1, // 一天一清：默认只保留 1 天记录
   pollIntervalMs: 2000,
   idleThresholdMs: 180000,
   screenshot: {
