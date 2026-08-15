@@ -1,0 +1,36 @@
+{
+  "pollIntervalMs": 2000,
+  "idleThresholdMs": 180000,
+  "screenshot": {
+    "enabled": true,
+    "intervalSeconds": 120,
+    "minIntervalSeconds": 120,
+    "pauseOnIdle": true,
+    "dedupEnabled": true,
+    "dedupThreshold": 0.02,
+    "dedupScaleWidth": 320,
+    "keepScreenshots": false,
+    "enterKeyTrigger": true,
+    "enterKeyDebounceMs": 30000,
+    "excludedApps": ["微信", "1Password", "KeychainAccess", "密码", "Password"],
+    "notExcludedApps": []
+  },
+  "keyboardHeatmap": {
+    "enabled": true,
+    "flushIntervalSeconds": 300
+  },
+  "vision": {
+    "enabled": true,
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKey": "sk-REPLACE-ME",
+    "model": "gpt-4o-mini",
+    "maxTokens": 1024,
+    "language": "zh",
+    "promptTemplate": "你是工作行为记录助手。请根据这张屏幕截图和当前前台应用信息，用一句话（不超过 60 字）概括用户此刻正在做什么工作。只描述工作内容，不要猜测情绪或意图。如果画面中出现密码、Token、验证码、API Key、私聊内容等敏感信息，一律用【敏感信息已过滤】代替，不得转述。",
+    "contextLines": 3
+  },
+  "log": {
+    "level": "info",
+    "file": "work-recorder.log"
+  }
+}

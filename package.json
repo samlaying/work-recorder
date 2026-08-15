@@ -1,0 +1,21 @@
+{
+  "name": "work-recorder",
+  "version": "0.1.0",
+  "description": "Headless behavior capture -> work records (layer 1 + 2, no frontend)",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "report": "node scripts/report.mjs"
+  },
+  "devDependencies": {
+    "electron": "^37.0.0"
+  },
+  "dependencies": {
+    "get-windows": "^9.3.0",
+    "node-sqlite3-wasm": "^0.8.45",
+    "pngjs": "^7.0.0",
+    "pixelmatch": "^7.1.0",
+    "uiohook-napi": "^1.5.5"
+  }
+}
