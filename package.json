@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "electron .",
-    "report": "node scripts/report.mjs"
+    "report": "node scripts/report.mjs",
+    "clean": "node scripts/clean.mjs",
+    "purge": "node scripts/clean.mjs --all"
   },
   "devDependencies": {
     "electron": "^37.0.0"

@@ -37,7 +37,21 @@ function recentContext(lines = 3) {
     .join('\n');
 }
 
+function pruneOldRecords(retentionDays = 14) {
+  try {
+    const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+    const cutoff = new Date(Date.now() + BEIJING_OFFSET_MS - retentionDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    db.prepare('DELETE FROM work_records WHERE substr(captured_at, 1, 10) < ?').run(cutoff);
+    db.prepare('DELETE FROM app_usage_sessions_v2 WHERE substr(started_at, 1, 10) < ?').run(cutoff);
+    db.prepare('DELETE FROM frame_dedup_logs WHERE substr(captured_at, 1, 10) < ?').run(cutoff);
+    db.prepare('DELETE FROM keyboard_heatmap WHERE date < ?').run(cutoff);
+  } catch (e) {
+    log.warn(`auto-prune failed: ${e.message}`);
+  }
+}
+
 function boot() {
+  pruneOldRecords(config.retentionDays ?? 14);
   input = new InputMonitor({ log, keyboardHeatmap: config.keyboardHeatmap });
   try {
     input.start();
