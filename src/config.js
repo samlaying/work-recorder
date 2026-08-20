@@ -34,6 +34,8 @@ export const DEFAULTS = {
     contextLines: 3,
   },
   log: { level: 'info', file: 'work-recorder.log' },
+  // Weekday capture window (Beijing). LaunchAgent starts on login; app quits at stopHour.
+  schedule: { enabled: true, weekdaysOnly: true, stopHour: 20, stopMinute: 0 },
 };
 
 function deepMerge(base, override) {

@@ -14,6 +14,8 @@ src/
 ├── screenshot.js         # 通道3：desktopCapturer → 去重(pixelmatch)/排除名单/最小间隔/空闲暂停
 └── vision.js             # 第2层：OpenAI 兼容视觉模型 → work_records（敏感信息过滤提示词）
 scripts/report.mjs        # 离线日报摘要（直接读 SQLite，不需要 Electron）
+scripts/schedule-tick.sh  # launchd：工作日窗口内拉起 / 20:00 停
+scripts/install-schedule.mjs
 ```
 
 ## 使用
@@ -23,6 +25,8 @@ cd work-recorder
 npm install
 cp config.example.json config.json   # 填 vision.apiKey（OpenAI/DeepSeek/GLM 等兼容端点均可）
 npm start                            # 启动后台采集
+npm run schedule:install             # 工作日登录/唤醒自动开始，北京时间 20:00 结束
+npm run schedule:uninstall           # 取消自动启停
 npm run report                       # 查看当天时间线 + 工作记录
 npm run report -- 2026-08-14         # 指定日期
 ```
@@ -33,8 +37,8 @@ npm run report -- 2026-08-14         # 指定日期
 
 | 权限 | 用途 | 开启方式 |
 |---|---|---|
-| 屏幕录制 | 截图 + get-windows 读窗口标题 | 系统设置 → 隐私与安全性 → 屏幕录制 → 添加 Electron |
-| 辅助功能 | uiohook 全局键鼠监听 | 系统设置 → 隐私与安全性 → 辅助功能 → 添加 Electron |
+| 屏幕录制 | 截图 + get-windows 读窗口标题 | 系统设置 → 隐私与安全性 → 屏幕录制 → 添加本仓库的 Electron：`node_modules/electron/dist/Electron.app`（不要加 openhanako 或其他项目里的） |
+| 辅助功能 | uiohook 全局键鼠监听 | 同上，添加**这一份** Electron |
 
 未授权时：前台应用读不到标题、截图为空、键鼠事件收不到——日志会有对应 warn。
 

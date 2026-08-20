@@ -7,6 +7,7 @@ import { ForegroundTracker } from './foreground-tracker.js';
 import { InputMonitor } from './input-monitor.js';
 import { ScreenshotService } from './screenshot.js';
 import { VisionService } from './vision.js';
+import { inCaptureWindow, msUntilScheduledStop, scheduleOptions } from './schedule.js';
 
 // Headless: no BrowserWindow, no frontend. Keep running without windows.
 if (!app.requestSingleInstanceLock()) {
@@ -24,6 +25,8 @@ const db = openDb(path.join(dataDir, 'work-recorder.db'));
 log.info(`work-recorder starting (config: ${configFile ?? 'defaults'})`);
 
 let tracker, input, shots, vision;
+let shuttingDown = false;
+let stopTimer;
 
 function recentContext(lines = 3) {
   const rows = db
@@ -47,12 +50,24 @@ function pruneOldRecords(retentionDays = 1) {
     const r4 = db.prepare('DELETE FROM keyboard_heatmap WHERE date < ?').run(cutoff);
     const totalDeleted = (r1.changes || 0) + (r2.changes || 0) + (r3.changes || 0) + (r4.changes || 0);
     if (totalDeleted > 0) {
-      db.exec('VACUUM;');
       log.info(`auto-prune: cleaned ${totalDeleted} records older than ${cutoff}`);
     }
   } catch (e) {
     log.warn(`auto-prune failed: ${e.message}`);
   }
+}
+
+function armScheduledStop() {
+  const opts = scheduleOptions(config);
+  if (!opts.enabled) return;
+  clearTimeout(stopTimer);
+  if (!inCaptureWindow(config)) {
+    shutdown('schedule-window');
+    return;
+  }
+  const ms = msUntilScheduledStop(config);
+  log.info(`scheduled stop in ${Math.round(ms / 60000)}m (Beijing ${String(opts.stopHour).padStart(2, '0')}:${String(opts.stopMinute).padStart(2, '0')})`);
+  stopTimer = setTimeout(() => shutdown('schedule-stop'), ms);
 }
 
 function boot() {
@@ -107,12 +122,16 @@ function boot() {
   });
 }
 
-function shutdown(reason) {
+let isShuttingDown = false;
+async function shutdown(reason) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
   log.info(`shutting down (${reason})`);
   try {
     shots?.stop();
     tracker?.stop(reason);
-    input?.stop(); // flushes heatmap
+    input?.stop();
+    await new Promise((r) => setTimeout(r, 150));
     db?.close();
   } catch (e) {
     log.error(`shutdown: ${e.message}`);

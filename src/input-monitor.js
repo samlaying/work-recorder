@@ -52,19 +52,24 @@ export class InputMonitor extends EventEmitter {
 
   stop() {
     if (!this.running) return;
+    this.running = false;
     try {
-      uIOhook.off('input', this.#onInput);
+      uIOhook.removeAllListeners();
       uIOhook.stop();
     } catch {
       /* already stopped */
     }
     if (this.flushTimer) clearInterval(this.flushTimer), (this.flushTimer = null);
-    this.flushHeatmap();
-    this.running = false;
+    try {
+      this.flushHeatmap();
+    } catch {
+      /* ignore flush error during shutdown */
+    }
     this.log.info('input-monitor stopped');
   }
 
   #onInput = (e) => {
+    if (!this.running) return;
     this.lastActivityAt = Date.now();
     if (e.type === 'keyDown') {
       const name = NAMED_KEYS.get(e.keycode) ?? `key_${e.keycode}`;

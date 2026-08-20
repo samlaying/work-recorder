@@ -85,6 +85,7 @@ export function openDb(dbPath) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   let db = new Database(dbPath);
   try {
+    db.exec('PRAGMA busy_timeout = 5000;');
     db.exec(SCHEMA);
   } catch (e) {
     // node-sqlite3-wasm's VFS cannot roll back its own hot journal after a
@@ -106,6 +107,7 @@ export function openDb(dbPath) {
       // the wasm VFS lock dir is also left in a bad state by SIGKILL
       if (fs.existsSync(lockDir)) fs.rmSync(lockDir, { recursive: true, force: true });
       db = new Database(dbPath);
+      db.exec('PRAGMA busy_timeout = 5000;');
       db.exec(SCHEMA);
     } else {
       throw e;

@@ -32,5 +32,11 @@
   "log": {
     "level": "info",
     "file": "work-recorder.log"
+  },
+  "schedule": {
+    "enabled": true,
+    "weekdaysOnly": true,
+    "stopHour": 20,
+    "stopMinute": 0
   }
 }

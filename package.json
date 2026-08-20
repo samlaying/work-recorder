@@ -8,7 +8,9 @@
     "start": "electron .",
     "report": "node scripts/report.mjs",
     "clean": "node scripts/clean.mjs",
-    "purge": "node scripts/clean.mjs --all"
+    "purge": "node scripts/clean.mjs --all",
+    "schedule:install": "node scripts/install-schedule.mjs",
+    "schedule:uninstall": "node scripts/install-schedule.mjs --uninstall"
   },
   "devDependencies": {
     "electron": "^37.0.0"
