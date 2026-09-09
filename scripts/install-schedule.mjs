@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Install / unload the weekday LaunchAgent (login + every 2 min tick, stop 20:00).
+// Install weekday auto-start (login / every 2 min tick, stop 20:00 Beijing).
+// macOS: LaunchAgent. Windows: Task Scheduler.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,11 +8,6 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const LABEL = 'local.work-recorder.schedule';
-const TICK = path.join(ROOT, 'scripts', 'schedule-tick.sh');
-const uid = process.getuid();
-const plistPath = path.join(os.homedir(), 'Library/LaunchAgents', `${LABEL}.plist`);
-const logPath = path.join(os.homedir(), 'Library/Logs/work-recorder-schedule.log');
 const uninstall = process.argv.includes('--uninstall');
 
 function launchctl(args) {
@@ -23,19 +19,27 @@ function launchctl(args) {
   }
 }
 
-fs.chmodSync(TICK, 0o755);
-launchctl(['bootout', `gui/${uid}/${LABEL}`]);
+function installDarwin() {
+  const LABEL = 'local.work-recorder.schedule';
+  const TICK = path.join(ROOT, 'scripts', 'schedule-tick.sh');
+  const uid = process.getuid();
+  const plistPath = path.join(os.homedir(), 'Library/LaunchAgents', `${LABEL}.plist`);
+  const logPath = path.join(os.homedir(), 'Library/Logs/work-recorder-schedule.log');
 
-if (uninstall) {
-  if (fs.existsSync(plistPath)) fs.unlinkSync(plistPath);
-  console.log(`unloaded ${LABEL}`);
-  process.exit(0);
-}
+  fs.chmodSync(TICK, 0o755);
+  launchctl(['bootout', `gui/${uid}/${LABEL}`]);
 
-fs.mkdirSync(path.dirname(plistPath), { recursive: true });
-fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  if (uninstall) {
+    if (fs.existsSync(plistPath)) fs.unlinkSync(plistPath);
+    console.log(`unloaded ${LABEL}`);
+    return;
+  }
 
-const plist = `<?xml version="1.0" encoding="UTF-8"?>
+  fs.mkdirSync(path.dirname(plistPath), { recursive: true });
+  fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  fs.writeFileSync(
+    plistPath,
+    `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -67,12 +71,59 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
   <string>${logPath}</string>
 </dict>
 </plist>
-`;
-fs.writeFileSync(plistPath, plist);
-launchctl(['bootstrap', `gui/${uid}`, plistPath]);
-launchctl(['enable', `gui/${uid}/${LABEL}`]);
-launchctl(['kickstart', '-k', `gui/${uid}/${LABEL}`]);
-console.log(`installed ${LABEL}`);
-console.log(`  plist: ${plistPath}`);
-console.log(`  log:   ${logPath}`);
-console.log('工作日登录/唤醒后两分钟内自动开始，北京时间 20:00 结束。周末不自动开。');
+`
+  );
+  launchctl(['bootstrap', `gui/${uid}`, plistPath]);
+  launchctl(['enable', `gui/${uid}/${LABEL}`]);
+  launchctl(['kickstart', '-k', `gui/${uid}/${LABEL}`]);
+  console.log(`installed ${LABEL}`);
+  console.log(`  plist: ${plistPath}`);
+  console.log(`  log:   ${logPath}`);
+}
+
+function schtasks(args) {
+  execFileSync('schtasks.exe', args, { stdio: 'pipe', windowsHide: true });
+}
+
+function installWin32() {
+  const TASK = 'work-recorder-schedule';
+  const tick = path.join(ROOT, 'scripts', 'schedule-tick.ps1');
+  try {
+    schtasks(['/Delete', '/TN', TASK, '/F']);
+  } catch {
+    /* not registered yet */
+  }
+  if (uninstall) {
+    console.log(`unloaded ${TASK}`);
+    return;
+  }
+  const tr = `powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "${tick}"`;
+  schtasks([
+    '/Create',
+    '/TN',
+    TASK,
+    '/TR',
+    tr,
+    '/SC',
+    'MINUTE',
+    '/MO',
+    '2',
+    '/RL',
+    'LIMITED',
+    '/F',
+  ]);
+  schtasks(['/Run', '/TN', TASK]);
+  console.log(`installed ${TASK}`);
+  console.log(`  tick: ${tick}`);
+  console.log(`  log:  %APPDATA%\\work-recorder\\schedule-tick.log`);
+}
+
+if (process.platform === 'win32') installWin32();
+else if (process.platform === 'darwin') installDarwin();
+else {
+  console.error(`schedule install is not supported on ${process.platform}`);
+  process.exit(1);
+}
+if (!uninstall) {
+  console.log('工作日登录后约两分钟内自动开始，北京时间 20:00 结束。周末不自动开。');
+}

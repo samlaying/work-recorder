@@ -115,7 +115,11 @@ export class ScreenshotService {
       );
       const primary = sources[0];
       if (!primary || primary.thumbnail.isEmpty()) {
-        this.log.warn('no screen source (Screen Recording permission?)');
+        this.log.warn(
+          process.platform === 'win32'
+            ? 'no screen source (Windows may block screen capture for this Electron)'
+            : 'no screen source (Screen Recording permission?)'
+        );
         return;
       }
 

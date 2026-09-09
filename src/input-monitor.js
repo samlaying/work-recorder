@@ -9,8 +9,8 @@ import { getBeijingDateString, getBeijingISOString } from './util.js';
  *  - 'enter' events          -> enter-key screenshot trigger ("just finished something")
  *  - per-key counters        -> keyboard heatmap (counts only, never content)
  *
- * macOS: requires Accessibility permission
- * (System Settings -> Privacy & Security -> Accessibility).
+ * Windows: uiohook uses a low-level hook (usually no extra permission).
+ * macOS: requires Accessibility permission.
  */
 
 const NAMED_KEYS = new Map(
@@ -36,7 +36,7 @@ export class InputMonitor extends EventEmitter {
       uIOhook.start();
     } catch (e) {
       this.log.error(
-        `uiohook start failed (Accessibility permission?): ${e.message}`
+        `uiohook start failed${process.platform === 'darwin' ? ' (Accessibility permission?)' : ''}: ${e.message}`
       );
       throw e;
     }

@@ -15,7 +15,10 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 
-app.dock?.hide(); // background agent, no dock icon
+app.dock?.hide();
+if (process.platform === 'win32') {
+  app.setAppUserModelId('local.work-recorder');
+}
 
 const { config, configFile } = loadConfig();
 const dataDir = app.getPath('userData');
@@ -25,7 +28,7 @@ const db = openDb(path.join(dataDir, 'work-recorder.db'));
 log.info(`work-recorder starting (config: ${configFile ?? 'defaults'})`);
 
 let tracker, input, shots, vision;
-let shuttingDown = false;
+let isShuttingDown = false;
 let stopTimer;
 
 function recentContext(lines = 3) {
@@ -71,6 +74,11 @@ function armScheduledStop() {
 }
 
 function boot() {
+  if (scheduleOptions(config).enabled && !inCaptureWindow(config)) {
+    log.info('outside weekday capture window — exiting');
+    shutdown('schedule-window');
+    return;
+  }
   pruneOldRecords(config.retentionDays ?? 1);
   // 定时每小时检查并清理一次过期旧数据（一天一清）
   setInterval(() => pruneOldRecords(config.retentionDays ?? 1), 3600 * 1000);
@@ -109,6 +117,7 @@ function boot() {
 
   tracker.start();
   shots.start();
+  armScheduledStop();
 
   powerMonitor.on('suspend', () => {
     log.info('system suspend -> pausing capture');
@@ -116,16 +125,22 @@ function boot() {
     tracker.stop('suspend');
   });
   powerMonitor.on('resume', () => {
+    if (scheduleOptions(config).enabled && !inCaptureWindow(config)) {
+      log.info('system resume outside capture window -> stopping');
+      shutdown('schedule-window');
+      return;
+    }
     log.info('system resume -> resuming capture');
     tracker.start();
     shots.start();
+    armScheduledStop();
   });
 }
 
-let isShuttingDown = false;
 async function shutdown(reason) {
   if (isShuttingDown) return;
   isShuttingDown = true;
+  clearTimeout(stopTimer);
   log.info(`shutting down (${reason})`);
   try {
     shots?.stop();

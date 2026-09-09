@@ -16,6 +16,13 @@ running_pid() {
   pgrep -f "$ELECTRON $ROOT" || true
 }
 
+# Manual "stop on these days": one YYYY-MM-DD per line in "$LOCK_DIR/skip-date"
+skip_today() {
+  local f="$LOCK_DIR/skip-date"
+  [[ -f "$f" ]] || return 1
+  grep -qx "$(date +%F)" "$f"
+}
+
 start_recorder() {
   if [[ ! -x "$ELECTRON" ]]; then
     echo "$(date '+%F %T') electron binary missing: $ELECTRON"
@@ -40,6 +47,12 @@ stop_recorder() {
     kill -TERM $pids 2>/dev/null || true
   fi
 }
+
+if skip_today; then
+  stop_recorder
+  echo "$(date '+%F %T') skip-date $(date +%F) — not starting"
+  exit 0
+fi
 
 # 10# avoids bash treating 08xx/09xx as invalid octal.
 if [[ "$is_weekday" -eq 1 && $((10#$hm)) -lt 2000 ]]; then

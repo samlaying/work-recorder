@@ -3,9 +3,9 @@
 // Usage: npm run report [-- 2026-08-14]
 import sqliteWasm from 'node-sqlite3-wasm';
 const { Database } = sqliteWasm;
-import os from 'node:os';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { workRecorderDataDir, recoverSqliteJournal } from '../src/paths.js';
 
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 const getBeijingDate = (d = new Date()) => {
@@ -23,7 +23,7 @@ const formatBeijingTime = (str) => {
 };
 
 const date = process.argv[2] ?? getBeijingDate();
-const dbPath = path.join(os.homedir(), 'Library/Application Support/work-recorder/work-recorder.db');
+const dbPath = path.join(workRecorderDataDir(), 'work-recorder.db');
 // open read-write so SQLite can roll back any hot journal left by a killed run;
 // a readOnly handle would fail with "database is locked" instead.
 let db;
@@ -36,10 +36,7 @@ try {
   const journal = dbPath + '-journal';
   const lockDir = dbPath + '.lock';
   if (/locked/i.test(e.message) && (fs.existsSync(journal) || fs.existsSync(lockDir))) {
-    const { execFileSync } = await import('node:child_process');
-    execFileSync('/usr/bin/sqlite3', [dbPath, 'SELECT count(*) FROM sqlite_master;'], { timeout: 3000, stdio: 'pipe' });
-    if (fs.existsSync(journal)) fs.renameSync(journal, `${journal}.stale-${Date.now()}`);
-    if (fs.existsSync(lockDir)) fs.rmSync(lockDir, { recursive: true, force: true });
+    recoverSqliteJournal(dbPath);
     db = new Database(dbPath);
   } else {
     throw e;
@@ -64,7 +61,7 @@ const sessions = db
      GROUP BY app_name, activity_state
      ORDER BY active_ms + idle_ms DESC`
   )
-  .all(date, date);
+  .all([date, date]);
 
 console.log(`\n== 工作时间线 ${date} (北京时间) ==`);
 console.log('应用                状态    总时长   活跃     会话  切换');
@@ -83,7 +80,7 @@ const records = db
         OR (captured_at NOT LIKE '%Z' AND substr(captured_at, 1, 10) = ?)
      ORDER BY id`
   )
-  .all(date, date);
+  .all([date, date]);
 
 console.log(`\n== 工作记录 (${records.length}) ==`);
 for (const r of records) {
@@ -99,7 +96,7 @@ const dedup = db
         OR (captured_at NOT LIKE '%Z' AND substr(captured_at, 1, 10) = ?)
      GROUP BY decision`
   )
-  .all(date, date);
+  .all([date, date]);
 console.log(`\n== 截图去重判定 ==`);
 for (const d of dedup) console.log(`${d.decision}: ${d.n}`);
 

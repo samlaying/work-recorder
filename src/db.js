@@ -2,8 +2,8 @@ import sqliteWasm from 'node-sqlite3-wasm';
 const { Database } = sqliteWasm;
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { getBeijingISOString } from './util.js';
+import { recoverSqliteJournal } from './paths.js';
 
 // Schema mirrors the reverse-engineered app (app_usage_sessions_v2 / frame_dedup_logs),
 // plus work_records and keyboard_heatmap for layers 1-2 of this clone.
@@ -98,14 +98,7 @@ export function openDb(dbPath) {
       try {
         db.close();
       } catch { /* already unusable */ }
-      execFileSync(
-        '/usr/bin/sqlite3',
-        [dbPath, 'SELECT count(*) FROM sqlite_master;'],
-        { timeout: 3000, stdio: 'pipe' }
-      );
-      if (fs.existsSync(journal)) fs.renameSync(journal, `${journal}.stale-${Date.now()}`);
-      // the wasm VFS lock dir is also left in a bad state by SIGKILL
-      if (fs.existsSync(lockDir)) fs.rmSync(lockDir, { recursive: true, force: true });
+      recoverSqliteJournal(dbPath);
       db = new Database(dbPath);
       db.exec('PRAGMA busy_timeout = 5000;');
       db.exec(SCHEMA);
@@ -137,8 +130,8 @@ export function upsertApplication(db, displayName) {
   const id = appIdFor(displayName);
   db.prepare(
     `INSERT INTO tracked_applications (id, platform, stable_key, display_name, first_seen_at, last_seen_at)
-     VALUES (?, 'darwin', ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET last_seen_at = excluded.last_seen_at`
-  ).run(id, 'name:' + displayName.toLowerCase().trim(), displayName, now, now);
+  ).run(id, process.platform, 'name:' + displayName.toLowerCase().trim(), displayName, now, now);
   return id;
 }

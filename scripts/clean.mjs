@@ -9,13 +9,14 @@
  */
 import sqliteWasm from 'node-sqlite3-wasm';
 const { Database } = sqliteWasm;
-import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
+import { workRecorderDataDir } from '../src/paths.js';
 
-const dbPath = path.join(os.homedir(), 'Library/Application Support/work-recorder/work-recorder.db');
-const logPath = path.join(os.homedir(), 'Library/Application Support/work-recorder/work-recorder.log');
-const screenshotDir = path.join(os.homedir(), 'Library/Application Support/work-recorder/screenshots');
+const dataDir = workRecorderDataDir();
+const dbPath = path.join(dataDir, 'work-recorder.db');
+const logPath = path.join(dataDir, 'work-recorder.log');
+const screenshotDir = path.join(dataDir, 'screenshots');
 
 const args = process.argv.slice(2);
 const isAll = args.includes('--all');

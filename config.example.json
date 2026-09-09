@@ -12,7 +12,7 @@
     "keepScreenshots": false,
     "enterKeyTrigger": true,
     "enterKeyDebounceMs": 30000,
-    "excludedApps": ["微信", "1Password", "KeychainAccess", "密码", "Password"],
+    "excludedApps": ["微信", "WeChat", "Weixin", "1Password", "KeychainAccess", "密码", "Password"],
     "notExcludedApps": []
   },
   "keyboardHeatmap": {
