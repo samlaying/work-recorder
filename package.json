@@ -9,6 +9,7 @@
     "report": "node scripts/report.mjs",
     "clean": "node scripts/clean.mjs",
     "purge": "node scripts/clean.mjs --all",
+    "test": "node --test",
     "schedule:install": "node scripts/install-schedule.mjs",
     "schedule:uninstall": "node scripts/install-schedule.mjs --uninstall"
   },

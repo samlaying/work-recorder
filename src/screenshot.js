@@ -37,6 +37,7 @@ export class ScreenshotService {
   }
 
   start() {
+    if (this.timer) return;
     if (!this.cfg.enabled) {
       this.log.info('screenshot channel disabled by config');
       return;
