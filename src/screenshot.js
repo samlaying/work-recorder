@@ -3,6 +3,7 @@ import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import { withTimeout, getBeijingISOString } from './util.js';
 import { activeWindowQuery } from './foreground-query.js';
+import { isSqliteBusy } from './db-retry.js';
 
 /**
  * Automatic screenshot channel (channel 3).
@@ -33,6 +34,7 @@ export class ScreenshotService {
     this.lastCaptureAt = 0;
     this.lastEnterCaptureAt = 0;
     this.busy = false;
+    this.cooldownUntil = 0;
     this.onCapture = null; // async ({png, appName, title, source}) => {}
   }
 
@@ -92,6 +94,7 @@ export class ScreenshotService {
 
   async #capture(source) {
     if (this.busy || !this.onCapture) return;
+    if (Date.now() < this.cooldownUntil) return;
     this.busy = true;
     try {
       let fg = { appName: null, title: null };
@@ -142,6 +145,12 @@ export class ScreenshotService {
         this.onCapture({ pngBuf, ...fg, source }),
         new Promise((r) => setTimeout(r, 20000)),
       ]);
+    } catch (error) {
+      if (isSqliteBusy(error)) {
+        this.cooldownUntil = Date.now() + 10000;
+        this.log.warn('database busy; pausing screenshots for 10s');
+      }
+      throw error;
     } finally {
       this.busy = false;
     }

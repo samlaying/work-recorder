@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getBeijingISOString } from './util.js';
 import { recoverSqliteJournal } from './paths.js';
-import { withSqliteRetrySync } from './db-retry.js';
 
 // Schema mirrors the reverse-engineered app (app_usage_sessions_v2 / frame_dedup_logs),
 // plus work_records and keyboard_heatmap for layers 1-2 of this clone.
@@ -86,7 +85,8 @@ export function openDb(dbPath) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   let db = new Database(dbPath);
   try {
-    db.exec('PRAGMA busy_timeout = 5000;');
+    // Keep the Electron main process responsive; service-level cooldown handles contention.
+    db.exec('PRAGMA busy_timeout = 100;');
     db.exec('PRAGMA journal_mode = WAL;');
     db.exec(SCHEMA);
   } catch (e) {
@@ -102,7 +102,7 @@ export function openDb(dbPath) {
       } catch { /* already unusable */ }
       recoverSqliteJournal(dbPath);
       db = new Database(dbPath);
-      db.exec('PRAGMA busy_timeout = 5000;');
+      db.exec('PRAGMA busy_timeout = 100;');
       db.exec('PRAGMA journal_mode = WAL;');
       db.exec(SCHEMA);
     } else {
@@ -116,10 +116,7 @@ export function openDb(dbPath) {
     const stmt = origPrepare(sql);
     for (const m of ['run', 'get', 'all']) {
       const fn = stmt[m].bind(stmt);
-      stmt[m] = (...args) => withSqliteRetrySync(
-        () => fn(args.length <= 1 ? args[0] : args),
-        { retries: 2, baseDelayMs: 20, maxDelayMs: 250 }
-      );
+      stmt[m] = (...args) => fn(args.length <= 1 ? args[0] : args);
     }
     return stmt;
   };

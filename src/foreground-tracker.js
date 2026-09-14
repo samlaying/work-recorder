@@ -1,6 +1,7 @@
 import { activeWindowQuery } from './foreground-query.js';
 import { upsertApplication } from './db.js';
 import { getBeijingISOString } from './util.js';
+import { isSqliteBusy } from './db-retry.js';
 
 /**
  * Foreground app tracker (channel 1).
@@ -24,6 +25,7 @@ export class ForegroundTracker {
     this.session = null; // { rowId, appId, appName, state, startedAt, lastSampleAt, activeMs, idleMs, longestActiveMs, samples, switches }
     this.lastAppName = null;
     this.onAppChange = null; // optional callback(appName, title)
+    this.writeCooldownUntil = 0;
   }
 
   start() {
@@ -44,6 +46,7 @@ export class ForegroundTracker {
   }
 
   async #poll() {
+    if (Date.now() < this.writeCooldownUntil) return;
     const win = await activeWindowQuery(2000);
     if (!win) return;
 
@@ -61,15 +64,23 @@ export class ForegroundTracker {
     const sameApp = this.session && this.session.appName === appName;
     const sameState = this.session && this.session.state === state;
 
-    if (!sameApp) {
+    try {
+      if (!sameApp) {
       // app switch closes the open session (if any), counting the switch
       this.#closeSession('app-switch');
       this.#openSession(appName, state, now, 'new-foreground-app');
-    } else if (!sameState) {
+      } else if (!sameState) {
       this.#closeSession(`state-${state}`);
       this.#openSession(appName, state, now, `activity-state-${state}`);
-    } else {
+      } else {
       this.#accumulate(now, appName);
+      }
+    } catch (error) {
+      if (isSqliteBusy(error)) {
+        this.writeCooldownUntil = Date.now() + 5000;
+        this.log.warn('database busy; pausing foreground writes for 5s');
+      }
+      throw error;
     }
   }
 
