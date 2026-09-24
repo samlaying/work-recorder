@@ -1,0 +1,22 @@
+{
+  "sessions": [
+    {
+      "date": "2026-09-20",
+      "task": "work-recorder 暂停于未提交的功能批次：久坐提醒 + 数据库自愈 + 打包/摘要脚本改进（main 分支，10 个修改 + 3 个新文件均未提交）",
+      "done": [
+        "久坐提醒功能：新增 src/break-reminder.js（ACTIVE 时间累计、workMinutes/breakMinutes 循环、自发空闲≥resetAfterMinutes 视为已休息并重置、写入 focus_cycles 表供日报使用），main.js 中经 config.reminder.enabled 接入，无障碍权限缺失时优雅降级",
+        "数据库自愈：main.js 用 Proxy 实现可热换 db 句柄 + 15s 看门狗探测 BEGIN IMMEDIATE，连续锁错误约 1 分钟后重建连接并恢复 journal（延续 1f81be0/97fc51b 的 sqlite 锁加固）",
+        "scripts/make-app.mjs：构建重命名并重签名的 Work Recorder.app（复制 node_modules 的 Electron），让 macOS 通知发送者显示 Work Recorder 而非 Electron，经 postinstall 在 electron 升级后自动重跑",
+        "scripts/db-snapshot.mjs：跨进程读走系统 sqlite3 + immutable=1（不取锁，避免卡死采集器的 VFS 假锁），export-digest.mjs / watch-digest.mjs / schedule-tick.sh 已改用它",
+        "vision.js / foreground-tracker.js / config.js / config.example.json / README.md 的配套修改"
+      ],
+      "remaining": [
+        "审查并提交这批未提交改动（约 185 行新增，横跨 13 个文件）",
+        "graphify-out/ 是缓存产物，加入 .gitignore 或删除，不要提交",
+        "端到端验证 make-app.mjs 重签名后的通知发送者名称",
+        "端到端验证久坐提醒：focus_cycles 落库并在日报中出现"
+      ],
+      "note": "用户于 2026-09-20 主动暂停项目；本次会话未做任何编辑，仅保存状态。"
+    }
+  ]
+}

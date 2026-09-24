@@ -20,10 +20,20 @@ export class VisionService {
     this.dataDir = dataDir;
     this.queue = [];
     this.running = false;
+    this.requestCount = 0;
   }
 
   enabled() {
-    return !!(this.cfg.enabled && this.cfg.apiKey && !this.cfg.apiKey.startsWith('sk-REPLACE'));
+    const providers = this.cfg.providers?.length ? this.cfg.providers : [this.cfg];
+    return !!(this.cfg.enabled && providers.some((p) => p.apiKey && !p.apiKey.startsWith('sk-REPLACE')));
+  }
+
+  #nextProvider() {
+    const providers = this.cfg.providers?.length ? this.cfg.providers : [this.cfg];
+    const weighted = providers.flatMap((p) => Array.from({ length: Math.max(1, p.weight ?? 1) }, () => p));
+    const provider = weighted[this.requestCount % weighted.length];
+    this.requestCount += 1;
+    return provider;
   }
 
   /** Called by the screenshot service with a fresh capture; serializes requests. */
@@ -51,6 +61,7 @@ export class VisionService {
 
   async #process({ pngBuf, appName, title, source, systemContext }) {
     const t0 = Date.now();
+    const provider = this.#nextProvider();
     const prompt = this.cfg.promptTemplate?.trim() || DEFAULT_PROMPT;
     const row = {
       captured_at: getBeijingISOString(),
@@ -59,7 +70,7 @@ export class VisionService {
       window_title: title,
       system_context: systemContext ?? null,
       prompt,
-      model: this.cfg.model,
+      model: provider.model,
       summary: null,
       raw_response: null,
       error: null,
@@ -75,14 +86,14 @@ export class VisionService {
           image_url: { url: `data:image/png;base64,${pngBuf.toString('base64')}` },
         },
       ];
-      const resp = await fetch(`${this.cfg.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      const resp = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.cfg.apiKey}`,
+          Authorization: `Bearer ${provider.apiKey}`,
         },
         body: JSON.stringify({
-          model: this.cfg.model,
+          model: provider.model,
           max_tokens: this.cfg.maxTokens ?? 1024,
           messages: [{ role: 'user', content }],
         }),

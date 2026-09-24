@@ -3,10 +3,13 @@ import path from 'node:path';
 import { loadConfig, PROJECT_ROOT } from './config.js';
 import { createLogger } from './log.js';
 import { openDb } from './db.js';
+import { isSqliteBusy } from './db-retry.js';
+import { recoverSqliteJournal } from './paths.js';
 import { ForegroundTracker } from './foreground-tracker.js';
 import { InputMonitor } from './input-monitor.js';
 import { ScreenshotService } from './screenshot.js';
 import { VisionService } from './vision.js';
+import { BreakReminder } from './break-reminder.js';
 import { inCaptureWindow, msUntilScheduledStop, scheduleOptions } from './schedule.js';
 
 // Headless: no BrowserWindow, no frontend. Keep running without windows.
@@ -23,13 +26,59 @@ if (process.platform === 'win32') {
 const { config, configFile } = loadConfig();
 const dataDir = app.getPath('userData');
 const log = createLogger(config.log, dataDir);
-const db = openDb(path.join(dataDir, 'work-recorder.db'));
+const dbPath = path.join(dataDir, 'work-recorder.db');
+
+// Swappable db handle: services capture `db` at construction, so recovery
+// swaps the underlying connection in place instead of restarting the process.
+const dbRef = { handle: openDb(dbPath) };
+const db = new Proxy({}, {
+  get: (_, prop) => {
+    const value = dbRef.handle[prop];
+    return typeof value === 'function' ? value.bind(dbRef.handle) : value;
+  },
+});
 
 log.info(`work-recorder starting (config: ${configFile ?? 'defaults'})`);
 
-let tracker, input, shots, vision;
+let tracker, input, shots, vision, reminder;
 let isShuttingDown = false;
 let stopTimer;
+let dbWatchdog;
+
+// Self-heal for wedged VFS locks: node-sqlite3-wasm reports "database is
+// locked" forever once its .lock dir is left stale (process died mid-write),
+// and openDb() only recovers at startup — a long-running collector used to
+// stay broken for the rest of the day. Probe cheaply; after ~1min of
+// consecutive lock errors, rebuild the connection.
+function startDbWatchdog() {
+  let busyStreak = 0;
+  dbWatchdog = setInterval(() => {
+    if (isShuttingDown) return;
+    try {
+      // Probe the WRITE path: a wedged connection still serves reads, so
+      // SELECT 1 passes while every INSERT/UPDATE fails with SQLITE_BUSY.
+      // BEGIN IMMEDIATE acquires the write lock without touching data.
+      db.exec('BEGIN IMMEDIATE');
+      db.exec('ROLLBACK');
+      busyStreak = 0;
+      return;
+    } catch (e) {
+      if (!isSqliteBusy(e)) return; // non-lock errors belong to the services
+      busyStreak += 1;
+      if (busyStreak < 5) return;
+    }
+    busyStreak = 0;
+    try {
+      log.warn('database locked for >1min — rebuilding connection');
+      try { dbRef.handle.close(); } catch { /* already unusable */ }
+      recoverSqliteJournal(dbPath);
+      dbRef.handle = openDb(dbPath);
+      log.info('database connection recovered');
+    } catch (e) {
+      log.error(`database recovery failed: ${e.message}`);
+    }
+  }, 15000);
+}
 
 function recentContext(lines = 3) {
   const rows = db
@@ -115,14 +164,32 @@ function boot() {
   };
   input.on('enter', () => shots.onEnterTrigger());
 
+  if (config.reminder?.enabled) {
+    if (input.running) {
+      reminder = new BreakReminder({
+        db,
+        log,
+        inputMonitor: input,
+        config: { ...config.reminder, idleThresholdMs: config.idleThresholdMs },
+      });
+      reminder.start();
+    } else {
+      // Wall-clock fallback would fire "focus" cycles at night with no input
+      // signal — the reminder is meaningless without real activity data.
+      log.warn('break-reminder off: keyboard channel unavailable (accessibility not granted)');
+    }
+  }
+
   tracker.start();
   shots.start();
   armScheduledStop();
+  startDbWatchdog();
 
   powerMonitor.on('suspend', () => {
     log.info('system suspend -> pausing capture');
     shots.stop();
     tracker.stop('suspend');
+    reminder?.stop('suspend');
   });
   powerMonitor.on('resume', () => {
     if (scheduleOptions(config).enabled && !inCaptureWindow(config)) {
@@ -131,6 +198,7 @@ function boot() {
       return;
     }
     log.info('system resume -> resuming capture');
+    reminder?.start();
     tracker.start();
     shots.start();
     armScheduledStop();
@@ -141,10 +209,12 @@ async function shutdown(reason) {
   if (isShuttingDown) return;
   isShuttingDown = true;
   clearTimeout(stopTimer);
+  clearInterval(dbWatchdog);
   log.info(`shutting down (${reason})`);
   try {
     shots?.stop();
     tracker?.stop(reason);
+    reminder?.stop(reason);
     input?.stop();
     await new Promise((r) => setTimeout(r, 150));
     db?.close();

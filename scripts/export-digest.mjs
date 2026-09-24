@@ -2,11 +2,11 @@
 // Export a day's work digest as Markdown into the Obsidian Growth-Vault.
 // Usage: node scripts/export-digest.mjs [YYYY-MM-DD] [--vault <path>]
 // Reuses the same queries as report.mjs; safe to re-run (overwrites same-day file).
-import sqliteWasm from 'node-sqlite3-wasm';
-const { Database } = sqliteWasm;
+// NEVER opens the live db with the wasm driver — see db-snapshot.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
-import { workRecorderDataDir, recoverSqliteJournal } from '../src/paths.js';
+import { workRecorderDataDir } from '../src/paths.js';
+import { queryJson } from './db-snapshot.mjs';
 
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 const getBeijingDate = (d = new Date()) =>
@@ -31,40 +31,40 @@ const pad = (ms) => {
 };
 
 const dbPath = path.join(workRecorderDataDir(), 'work-recorder.db');
-let db;
-try {
-  db = new Database(dbPath);
-  db.prepare('SELECT 1').all();
-} catch (e) {
-  const journal = dbPath + '-journal';
-  const lockDir = dbPath + '.lock';
-  if (/locked/i.test(e.message) && (fs.existsSync(journal) || fs.existsSync(lockDir))) {
-    recoverSqliteJournal(dbPath);
-    db = new Database(dbPath);
-  } else {
-    throw e;
-  }
-}
 
-const sessions = db.prepare(
+// date is regex-validated above, so inlining it into the snapshot queries is safe.
+const sessions = queryJson(
+  dbPath,
   `SELECT app_name, activity_state,
           SUM(COALESCE(active_duration_ms, 0)) AS active_ms,
           SUM(COALESCE(idle_duration_ms, 0)) AS idle_ms,
           COUNT(*) AS session_count,
           SUM(COALESCE(context_switch_count, 0)) AS switches
    FROM app_usage_sessions_v2
-   WHERE (started_at LIKE '%Z' AND date(started_at, '+8 hours') = ?)
-      OR (started_at NOT LIKE '%Z' AND substr(started_at, 1, 10) = ?)
+   WHERE (started_at LIKE '%Z' AND date(started_at, '+8 hours') = '${date}')
+      OR (started_at NOT LIKE '%Z' AND substr(started_at, 1, 10) = '${date}')
    GROUP BY app_name, activity_state
    ORDER BY active_ms + idle_ms DESC`
-).all([date, date]);
+);
 
-const records = db.prepare(
+const records = queryJson(
+  dbPath,
   `SELECT captured_at, source, app_name, summary, error FROM work_records
-   WHERE (captured_at LIKE '%Z' AND date(captured_at, '+8 hours') = ?)
-      OR (captured_at NOT LIKE '%Z' AND substr(captured_at, 1, 10) = ?)
-   ORDER BY id`
-).all([date, date]);
+   WHERE (captured_at LIKE '%Z' AND date(captured_at, '+8 hours') = '${date}')
+      OR (captured_at NOT LIKE '%Z' AND substr(captured_at, 1, 10) = '${date}')
+   ORDER BY id DESC`
+);
+
+let cycles = [];
+try {
+  cycles = queryJson(
+    dbPath,
+    `SELECT work_started_at, work_ended_at, break_ended_at, rested
+     FROM focus_cycles WHERE date = '${date}' ORDER BY id`
+  );
+} catch {
+  /* table not created yet (collector predates the reminder feature) */
+}
 
 let md = `---
 created: ${date}
@@ -92,6 +92,16 @@ if (!sessions.length && !records.length) {
     md += r.error
       ? `- ${t} [${r.source}] ⚠️ ${r.error}\n`
       : `- ${t} — ${r.summary}\n`;
+  }
+  if (cycles.length) {
+    const restedCount = cycles.filter((c) => c.rested).length;
+    md += `\n## 🍅 专注周期（${cycles.length} 个 · 实际休息 ${restedCount} 次）\n\n`;
+    for (const c of cycles) {
+      const from = (c.work_started_at ?? '').slice(11, 16);
+      const to = (c.work_ended_at ?? '').slice(11, 16);
+      const state = c.rested ? '休息 ✓' : c.break_ended_at ? '未休息 ✗' : '进行中';
+      md += `- ${from}–${to} ${state}\n`;
+    }
   }
 }
 

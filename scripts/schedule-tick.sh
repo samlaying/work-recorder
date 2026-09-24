@@ -3,6 +3,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# NOTE: a renamed/re-signed Electron bundle (scripts/make-app.mjs) was tried
+# here for nicer notification branding, but TCC grants (屏幕录制/辅助功能) are
+# unstable for ad-hoc signed copies and silently broke on relaunch — permissions
+# stayed reliable only on the original node_modules bundle. Launch that.
 ELECTRON="$ROOT/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
 LOCK_DIR="$HOME/Library/Application Support/work-recorder"
 export TZ=Asia/Shanghai
@@ -13,7 +17,8 @@ is_weekday=0
 [[ "$dow" -ge 1 && "$dow" -le 5 ]] && is_weekday=1
 
 running_pid() {
-  pgrep -f "$ELECTRON $ROOT" || true
+  # "MacOS/Electron $ROOT" matches both the branded and node_modules launches
+  pgrep -f "MacOS/Electron $ROOT" || true
 }
 
 # Manual "stop on these days": one YYYY-MM-DD per line in "$LOCK_DIR/skip-date"

@@ -45,6 +45,9 @@ npm run report -- 2026-08-14         # 指定日期
 |---|---|---|
 | 屏幕录制 | 截图 + get-windows 读窗口标题 | 系统设置 → 隐私与安全性 → 屏幕录制 → 添加本仓库的 Electron：`node_modules/electron/dist/Electron.app` |
 | 辅助功能 | uiohook 全局键鼠监听 | 同上，添加**这一份** Electron |
+| 通知 | 专注/休息提醒 | 首次提醒弹出时允许（发送方显示为 "Electron"） |
+
+> 不要用改名/重签名的 Electron 副本（如 `scripts/make-app.mjs` 生成的）来跑：TCC 对 ad-hoc 签名副本的授权不稳定，重启后可能静默失效（2026-09-18 曾因此丢了一整天数据）。通知署名 "Electron" 是可接受的外观代价。
 
 ## Windows 注意
 

@@ -34,6 +34,9 @@ export const DEFAULTS = {
     contextLines: 3,
   },
   log: { level: 'info', file: 'work-recorder.log' },
+  // Focus/break rhythm: accumulate active time, then remind a rest.
+  // Spontaneous idle >= resetAfterMinutes counts as rest taken (counter reset).
+  reminder: { enabled: true, workMinutes: 45, breakMinutes: 5, resetAfterMinutes: 5 },
   // Weekday capture window (Beijing). LaunchAgent starts on login; app quits at stopHour.
   schedule: { enabled: true, weekdaysOnly: true, stopHour: 20, stopMinute: 0 },
 };

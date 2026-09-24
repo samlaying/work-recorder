@@ -14,6 +14,7 @@ import { isSqliteBusy } from './db-retry.js';
  */
 
 export class ForegroundTracker {
+  #missStreak = 0; // consecutive foreground query failures (permission-loss tripwire)
   constructor({ db, log, inputMonitor, pollIntervalMs, idleThresholdMs }) {
     this.db = db;
     this.log = log;
@@ -48,7 +49,18 @@ export class ForegroundTracker {
   async #poll() {
     if (Date.now() < this.writeCooldownUntil) return;
     const win = await activeWindowQuery(2000);
-    if (!win) return;
+    if (!win) {
+      // Silent per-poll failure hid a whole day of lost tracking when the
+      // helper lost its screen-recording permission. Surface it periodically.
+      this.#missStreak = (this.#missStreak ?? 0) + 1;
+      if (this.#missStreak === 1 || this.#missStreak % 150 === 0) {
+        this.log.warn(
+          `foreground query failing ${this.#missStreak}x (screen recording permission? helper broken?)`
+        );
+      }
+      return;
+    }
+    this.#missStreak = 0;
 
     const appName = win.owner?.name || win.owner?.path || 'Unknown';
     const title = win.title || '';

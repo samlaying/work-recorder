@@ -72,6 +72,21 @@ CREATE TABLE IF NOT EXISTS work_records (
 
 CREATE INDEX IF NOT EXISTS idx_work_records_captured ON work_records (captured_at);
 
+CREATE TABLE IF NOT EXISTS focus_cycles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  work_started_at TEXT NOT NULL,
+  work_ended_at TEXT NOT NULL,
+  work_ms INTEGER NOT NULL,
+  break_started_at TEXT NOT NULL,
+  break_ended_at TEXT,
+  break_active_ms INTEGER,
+  rested INTEGER,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_focus_cycles_date ON focus_cycles (date);
+
 CREATE TABLE IF NOT EXISTS keyboard_heatmap (
   date TEXT NOT NULL,
   key_name TEXT NOT NULL,

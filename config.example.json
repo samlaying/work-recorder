@@ -33,6 +33,12 @@
     "level": "info",
     "file": "work-recorder.log"
   },
+  "reminder": {
+    "enabled": true,
+    "workMinutes": 45,
+    "breakMinutes": 5,
+    "resetAfterMinutes": 5
+  },
   "schedule": {
     "enabled": true,
     "weekdaysOnly": true,
